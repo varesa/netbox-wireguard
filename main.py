@@ -2,6 +2,7 @@ from pdb import set_trace as st
 import pynetbox
 import subprocess
 import sys
+from textwrap import dedent
 from typing import List
 
 URL = 'http://localhost:8000'
@@ -106,6 +107,20 @@ def get_devices():
     return vms
 
 
+def generate_wg_interface(interface_name, remote_device):
+    print(dedent(f"""
+    set interfaces wireguard {interface_name} address '<tbd>/30'
+    set interfaces wireguard {interface_name} description 'to {remote_device.name}'
+    set interfaces wireguard {interface_name} mtu '1420'
+    set interfaces wireguard {interface_name} peer {remote_device.name} address '{remote_device.pubip}'
+    set interfaces wireguard {interface_name} peer {remote_device.name} allowed-ips '0.0.0.0/0'
+    set interfaces wireguard {interface_name} peer {remote_device.name} port '<tbd>'
+    set interfaces wireguard {interface_name} peer {remote_device.name} pubkey '{remote_device.pubkey}'
+    set interfaces wireguard {interface_name} port '<tbd>'
+
+    """))
+
+
 def main():
     devices = get_devices()
 
@@ -117,6 +132,9 @@ def main():
 
     device1_nic = find_description(device1.interfaces, device2.name) or create_nic(device1, device2.name)
     device2_nic = find_description(device2.interfaces, device1.name) or create_nic(device2, device1.name)
+
+    generate_wg_interface(str(device1_nic), device2)
+    generate_wg_interface(str(device2_nic), device1)
 
 
 if __name__ == '__main__':
