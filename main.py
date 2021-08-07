@@ -31,6 +31,7 @@ def generate_bgp_peer(local_endpoint: ConnectionEndpoint, remote_endpoint: Conne
 
 
 def gen_config_device(conf_device, peer_device):
+    print("# Config for device", conf_device.name)
     local_ep = make_connection(conf_device, peer_device)
     remote_ep = make_connection(peer_device, conf_device)
 
