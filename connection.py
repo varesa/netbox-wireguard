@@ -1,4 +1,4 @@
-from netbox import get_link_ip, get_link_prefix_parent, get_link_prefix, create_nic, Device, Address
+from netbox import get_link_prefix_parent, get_link_prefix, Device, Address
 from utils import get_subnet_offset, find_description, die
 
 
@@ -21,12 +21,12 @@ class ConnectionEndpoint:
 
 def make_connection(local_device: Device, peer_device: Device) -> ConnectionEndpoint:
     interface_name = find_description(local_device.interfaces, peer_device.name) \
-                      or create_nic(local_device, peer_device.name)
+                      or local_device.create_nic(peer_device.name)
 
     prefix = get_link_prefix(local_device.name, peer_device.name)
     offset = get_subnet_offset(get_link_prefix_parent().cidr, prefix.cidr)
     port = 51820 + offset
-    link_ip = get_link_ip(prefix, local_device.name)
+    link_ip = prefix.get_or_create_address(local_device.name)
 
     return ConnectionEndpoint(
         device=local_device,

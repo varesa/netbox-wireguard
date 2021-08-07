@@ -1,9 +1,8 @@
-from pdb import set_trace as st
 import sys
 from textwrap import dedent
 
-from utils import die, find_description, has_tag, get_subnet_offset
-from netbox import create_nic, get_link_prefix, get_devices, get_link_ip, get_link_prefix_parent, Device
+from utils import die
+from netbox import get_devices, Device
 from connection import ConnectionEndpoint, make_connection
 
 

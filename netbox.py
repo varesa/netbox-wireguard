@@ -53,6 +53,16 @@ class Prefix:
             "description": description,
         }))
 
+    def get_or_create_address(self, device_name: str) -> Address:
+        api = getattr(nb.ipam, 'ip-addresses')
+
+        existing_ips = api.filter(parent=self.cidr)
+        for ip in existing_ips:
+            if ip.description == device_name:
+                return Address(ip)
+
+        return self.create_address(device_name)
+
 
 class Device:
     netbox_object: pynetbox.core.response.Record = None
@@ -60,10 +70,11 @@ class Device:
     public_key: str = None
     interfaces = None
 
-    def __init__(self, netbox_object: pynetbox.core.response.Record, public_ip: Address, interfaces):
+    def __init__(self, netbox_object: pynetbox.core.response.Record):
         self.netbox_object = netbox_object
-        self.public_ip = public_ip
-        self.interfaces = interfaces
+
+        public_interface = self.public_interface
+        self.public_ip = get_interface_ip(public_interface) if public_interface else None
 
     @property
     def name(self) -> str:
@@ -76,6 +87,32 @@ class Device:
     @property
     def public_key(self) -> str:
         return self.netbox_object.custom_fields['wg-public-key']
+
+    @property
+    def interfaces(self):
+        return get_interfaces().get(self.name, [])
+
+    def create_nic(self, target_name: str):
+        existing = self.interfaces
+        index = 0
+        for interface in existing:
+            if str(interface.name).startswith('wg'):
+                existing_index = int(interface.name[2:])
+                if existing_index <= index:
+                    index = existing_index + 1
+
+        api = nb.virtualization.interfaces
+        return api.create({
+            "name": f"wg{index}",
+            "virtual_machine": {"name": self.name},
+            "description": str(target_name)
+        })
+
+    @property
+    def public_interface(self):
+        public_interfaces = list(filter(lambda interface: has_tag(interface, TAG_PUBLIC_INTERFACE), self.interfaces))
+        assert 0 <= len(public_interfaces) <= 1
+        return public_interfaces[0] if public_interfaces else None
 
 
 def get_interfaces():
@@ -94,18 +131,6 @@ def get_interfaces():
     return interfaces
 
 
-def get_interfaces_for_vm(name: str):
-    interfaces = get_interfaces()
-    return interfaces.get(name, [])
-
-
-def find_public_interface(interfaces: list):
-    for interface in interfaces:
-        if has_tag(interface, TAG_PUBLIC_INTERFACE):
-            return interface
-    return None
-
-
 def get_interface_ip(interface) -> Optional[Address]:
     api = getattr(nb.ipam, 'ip-addresses')
     result = api.get(vminterface_id=interface.id)
@@ -113,23 +138,6 @@ def get_interface_ip(interface) -> Optional[Address]:
         return Address(result)
     else:
         return None
-
-
-def create_nic(device: Device, target_name: str):
-    existing = get_interfaces_for_vm(device.name)
-    index = 0
-    for interface in existing:
-        if str(interface.name).startswith('wg'):
-            existing_index = int(interface.name[2:])
-            if existing_index <= index:
-                index = existing_index + 1
-
-    api = nb.virtualization.interfaces
-    return api.create({
-        "name": f"wg{index}",
-        "virtual_machine": {"name": device.name},
-        "description": str(target_name)
-    })
 
 
 def get_devices() -> dict[Device]:
@@ -141,15 +149,7 @@ def get_devices() -> dict[Device]:
         if not has_tag(vm, TAG_COREVPN):
             continue
 
-        interfaces = get_interfaces_for_vm(vm.name)
-        public_interface = find_public_interface(interfaces)
-        public_ip = get_interface_ip(public_interface) if public_interface else None
-
-        devices[vm.name] = Device(
-            netbox_object=vm,
-            interfaces=interfaces,
-            public_ip=public_ip,
-        )
+        devices[vm.name] = Device(netbox_object=vm)
 
     return devices
 
@@ -176,14 +176,3 @@ def get_link_prefix(device1_name: str, device2_name: str) -> Prefix:
 
     # Else create a new one
     return pool.create_inner(description=description)
-
-
-def get_link_ip(prefix: pynetbox.core.response.Record, device_name: str) -> Address:
-    api = getattr(nb.ipam, 'ip-addresses')
-
-    existing_ips = api.filter(parent=prefix.cidr)
-    for ip in existing_ips:
-        if ip.description == device_name:
-            return Address(ip)
-
-    return prefix.create_address(device_name)
