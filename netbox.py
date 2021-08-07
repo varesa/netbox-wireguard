@@ -64,17 +64,49 @@ class Prefix:
         return self.create_address(device_name)
 
 
+class Interface:
+    netbox_object: pynetbox.core.response.Record = None
+
+    def __init__(self, netbox_object: pynetbox.core.response.Record):
+        self.netbox_object = netbox_object
+
+    @property
+    def id(self) -> int:
+        return self.netbox_object.id
+
+    @property
+    def name(self) -> str:
+        return self.netbox_object.name
+
+    @property
+    def tags(self) -> list:
+        return self.netbox_object.tags
+
+    @property
+    def description(self) -> str:
+        return self.netbox_object.description
+
+    @property
+    def ip(self) -> Optional[Address]:
+        api = getattr(nb.ipam, 'ip-addresses')
+        result = api.get(vminterface_id=self.id)
+        if result:
+            return Address(result)
+        else:
+            return None
+
+
 class Device:
     netbox_object: pynetbox.core.response.Record = None
     public_ip: Address = None
     public_key: str = None
-    interfaces = None
+    interfaces: list[Interface] = None
 
     def __init__(self, netbox_object: pynetbox.core.response.Record):
         self.netbox_object = netbox_object
 
         public_interface = self.public_interface
-        self.public_ip = get_interface_ip(public_interface) if public_interface else None
+        self.public_ip = public_interface.ip if public_interface else None
 
     @property
     def name(self) -> str:
@@ -89,10 +121,10 @@ class Device:
         return self.netbox_object.custom_fields['wg-public-key']
 
     @property
-    def interfaces(self):
+    def interfaces(self) -> list[Interface]:
         return get_interfaces().get(self.name, [])
 
-    def create_nic(self, target_name: str):
+    def create_nic(self, target_name: str) -> Interface:
         existing = self.interfaces
         index = 0
         for interface in existing:
@@ -109,13 +141,13 @@ class Device:
         })
 
     @property
-    def public_interface(self):
+    def public_interface(self) -> Interface:
         public_interfaces = list(filter(lambda interface: has_tag(interface, TAG_PUBLIC_INTERFACE), self.interfaces))
         assert 0 <= len(public_interfaces) <= 1
         return public_interfaces[0] if public_interfaces else None
 
 
-def get_interfaces():
+def get_interfaces() -> list[Interface]:
     global interfaces
 
     if not interfaces:
@@ -124,20 +156,11 @@ def get_interfaces():
         for interface in api.all():
             vm = str(interface.virtual_machine.name)
             if vm not in interfaces.keys():
-                interfaces[vm] = [interface]
+                interfaces[vm] = [Interface(interface)]
             else:
-                interfaces[vm].append(interface)
+                interfaces[vm].append(Interface(interface))
 
     return interfaces
-
-
-def get_interface_ip(interface) -> Optional[Address]:
-    api = getattr(nb.ipam, 'ip-addresses')
-    result = api.get(vminterface_id=interface.id)
-    if result:
-        return Address(result)
-    else:
-        return None
 
 
 def get_devices() -> dict[Device]:
