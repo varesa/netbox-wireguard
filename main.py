@@ -11,6 +11,7 @@ TOKEN = subprocess.check_output(['secret-tool', 'lookup', 'service', 'netbox']).
 
 TAG_COREVPN = 'Core VPN'
 TAG_PUBLIC_INTERFACE = 'Public interface'
+TAG_COREVPN_PREFIXES = 'core-vpn-link-network-pool'
 
 nb = pynetbox.api(URL, token=TOKEN)
 
@@ -68,7 +69,11 @@ def find_public_interface(interfaces: List):
 
 def get_interface_ip(interface):
     api = getattr(nb.ipam, 'ip-addresses')
-    return api.get(vminterface_id=interface.id).address.split('/')[0]
+    result = api.get(vminterface_id=interface.id)
+    if result:
+        return result.address.split('/')[0]
+    else:
+        return None
 
 
 def create_nic(vm, target_name: str):
@@ -107,6 +112,25 @@ def get_devices():
     return vms
 
 
+def get_link_prefix(device1, device2):
+    names = sorted([device1.name, device2.name])
+
+    api = nb.ipam.prefixes
+
+    pool = api.get(tag=TAG_COREVPN_PREFIXES)
+    parent_prefix = pool.prefix
+
+    description = f"{names[0]} - {names[1]} [WG]"
+
+    prefixes = api.filter(within=parent_prefix)
+    for prefix in prefixes:
+        if str(prefix.description) == description:
+            return prefix.prefix
+
+    # Else create a new one
+    return pool.available_prefixes.create({"prefix_length": 30, "description": description})
+
+
 def generate_wg_interface(interface_name, remote_device):
     print(dedent(f"""
     set interfaces wireguard {interface_name} address '<tbd>/30'
@@ -121,20 +145,25 @@ def generate_wg_interface(interface_name, remote_device):
     """))
 
 
+def gen_config_device(conf_device, peer_device):
+    print(conf_device.name, conf_device.pubkey, conf_device.pubip, conf_device.site.asn)
+
+    conf_device_nic = find_description(conf_device.interfaces, peer_device.name) \
+        or create_nic(conf_device, peer_device.name)
+
+    prefix = get_link_prefix(conf_device, peer_device)
+
+    generate_wg_interface(str(conf_device_nic), peer_device)
+
+
 def main():
     devices = get_devices()
 
     device1 = devices.get(sys.argv[1], None) or die(f"Device {sys.argv[1]} not found")
     device2 = devices.get(sys.argv[2], None) or die(f"Device {sys.argv[2]} not found")
 
-    print(device1.name, device1.pubkey, device1.pubip, device1.site.asn)
-    print(device2.name, device2.pubkey, device2.pubip, device2.site.asn)
-
-    device1_nic = find_description(device1.interfaces, device2.name) or create_nic(device1, device2.name)
-    device2_nic = find_description(device2.interfaces, device1.name) or create_nic(device2, device1.name)
-
-    generate_wg_interface(str(device1_nic), device2)
-    generate_wg_interface(str(device2_nic), device1)
+    gen_config_device(device1, device2)
+    gen_config_device(device2, device1)
 
 
 if __name__ == '__main__':
