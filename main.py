@@ -15,18 +15,18 @@ def generate_wg_interface(local_endpoint: ConnectionEndpoint, remote_endpoint: C
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} address '{remote_endpoint.device.pubip}'
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} allowed-ips '0.0.0.0/0'
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} port '{local_endpoint.port}'
-    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} pubkey '{remote_endpoint.device.pubkey}'
+    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} public-key '{remote_endpoint.device.pubkey}'
     set interfaces wireguard {local_endpoint.interface_name} port '{local_endpoint.port}'
     """))
 
 
 def generate_bgp_peer(local_endpoint: ConnectionEndpoint, remote_endpoint: ConnectionEndpoint):
     print(dedent(f"""
-    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map import 'ONLYRFC1918PREFIXES'
-    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map export 'ONLYRFC1918PREFIXES'
-    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast soft-reconfiguration inbound
-    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} description '{remote_endpoint.device.name}'
-    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} remote-as '{remote_endpoint.asn}'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map import 'ONLYRFC1918PREFIXES'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map export 'ONLYRFC1918PREFIXES'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast soft-reconfiguration inbound
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip} description '{remote_endpoint.device.name}'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip} remote-as '{remote_endpoint.asn}'
     """))
 
 
