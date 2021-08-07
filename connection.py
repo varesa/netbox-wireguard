@@ -20,8 +20,10 @@ class ConnectionEndpoint:
 
 
 def make_connection(local_device: Device, peer_device: Device) -> ConnectionEndpoint:
-    interface_name = find_description(local_device.interfaces, peer_device.name) \
-                      or local_device.create_nic(peer_device.name)
+    interface_name = (
+            find_description(local_device.interfaces, peer_device.name) or
+            local_device.create_nic(peer_device.name)
+    ).name
 
     prefix = get_link_prefix(local_device.name, peer_device.name)
     offset = get_subnet_offset(get_link_prefix_pool().cidr, prefix.cidr)
