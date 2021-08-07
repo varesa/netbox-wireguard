@@ -2,7 +2,7 @@ import pynetbox
 import subprocess
 from typing import Optional
 
-from utils import die, find_description, has_tag
+from utils import has_tag
 
 URL = 'http://localhost:8000'
 TOKEN = subprocess.check_output(['secret-tool', 'lookup', 'service', 'netbox']).decode()
@@ -99,8 +99,6 @@ class Interface:
 class Device:
     netbox_object: pynetbox.core.response.Record = None
     public_ip: Address = None
-    public_key: str = None
-    interfaces: list[Interface] = None
 
     def __init__(self, netbox_object: pynetbox.core.response.Record):
         self.netbox_object = netbox_object
@@ -147,7 +145,7 @@ class Device:
         return public_interfaces[0] if public_interfaces else None
 
 
-def get_interfaces() -> list[Interface]:
+def get_interfaces() -> dict[str, Interface]:
     global interfaces
 
     if not interfaces:
@@ -177,7 +175,7 @@ def get_devices() -> dict[Device]:
     return devices
 
 
-def get_link_prefix_parent() -> Prefix:
+def get_link_prefix_pool() -> Prefix:
     api = nb.ipam.prefixes
     return Prefix(api.get(tag=TAG_COREVPN_PREFIXES))
 
@@ -187,7 +185,7 @@ def get_link_prefix(device1_name: str, device2_name: str) -> Prefix:
 
     api = nb.ipam.prefixes
 
-    pool = get_link_prefix_parent()
+    pool = get_link_prefix_pool()
     parent_prefix = pool.cidr
 
     description = f"{names[0]} - {names[1]} [WG]"

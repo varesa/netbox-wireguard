@@ -1,16 +1,16 @@
-from netbox import get_link_prefix_parent, get_link_prefix, Device, Address
+from netbox import get_link_prefix_pool, get_link_prefix, Device, Address
 from utils import get_subnet_offset, find_description, die
 
 
 class ConnectionEndpoint:
-    device = None
+    device: Device = None
     interface_name: str = None
     public_ip: Address = None
     tunnel_ip: Address = None
     port: int = None
     asn: int = None
 
-    def __init__(self, device, interface_name, public_ip, tunnel_ip, port, asn):
+    def __init__(self, device: Device, interface_name: str, public_ip: Address, tunnel_ip: Address, port: int, asn: int):
         self.device = device
         self.interface_name = interface_name
         self.public_ip = public_ip
@@ -24,7 +24,7 @@ def make_connection(local_device: Device, peer_device: Device) -> ConnectionEndp
                       or local_device.create_nic(peer_device.name)
 
     prefix = get_link_prefix(local_device.name, peer_device.name)
-    offset = get_subnet_offset(get_link_prefix_parent().cidr, prefix.cidr)
+    offset = get_subnet_offset(get_link_prefix_pool().cidr, prefix.cidr)
     port = 51820 + offset
     link_ip = prefix.get_or_create_address(local_device.name)
 
