@@ -9,7 +9,7 @@ from connection import ConnectionEndpoint, make_connection
 
 def generate_wg_interface(local_endpoint: ConnectionEndpoint, remote_endpoint: ConnectionEndpoint):
     print(dedent(f"""
-    set interfaces wireguard {local_endpoint.interface_name} address '{local_endpoint.tunnel_ip}'
+    set interfaces wireguard {local_endpoint.interface_name} address '{local_endpoint.tunnel_ip}/30'
     set interfaces wireguard {local_endpoint.interface_name} description 'to {remote_endpoint.device.name}'
     set interfaces wireguard {local_endpoint.interface_name} mtu '1420'
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} address '{remote_endpoint.device.pubip}'
@@ -20,11 +20,22 @@ def generate_wg_interface(local_endpoint: ConnectionEndpoint, remote_endpoint: C
     """))
 
 
+def generate_bgp_peer(local_endpoint: ConnectionEndpoint, remote_endpoint: ConnectionEndpoint):
+    print(dedent(f"""
+    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map import 'ONLYRFC1918PREFIXES'
+    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map export 'ONLYRFC1918PREFIXES'
+    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast soft-reconfiguration inbound
+    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} description '{remote_endpoint.device.name}'
+    set protocols bgp {local_endpoint.asn} neighbor {remote_endpoint.tunnel_ip} remote-as '{remote_endpoint.asn}'
+    """))
+
+
 def gen_config_device(conf_device, peer_device):
     local_ep = make_connection(conf_device, peer_device)
     remote_ep = make_connection(peer_device, conf_device)
 
     generate_wg_interface(local_ep, remote_ep)
+    generate_bgp_peer(local_ep, remote_ep)
 
 
 def main():
