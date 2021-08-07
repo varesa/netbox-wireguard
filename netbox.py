@@ -42,13 +42,13 @@ class Prefix:
     def cidr(self) -> str:
         return self.netbox_object.prefix
 
-    def create_inner(self, prefix_length=30, description=""):
+    def create_inner(self, prefix_length: int=30, description: str="") -> 'Prefix':
         return Prefix(self.netbox_object.available_prefixes.create({
             "prefix_length": prefix_length,
             "description": description,
         }))
 
-    def create_address(self, description):
+    def create_address(self, description: str) -> Address:
         return Address(self.netbox_object.available_ips.create({
             "description": description,
         }))
@@ -161,7 +161,7 @@ def get_interfaces() -> dict[str, Interface]:
     return interfaces
 
 
-def get_devices() -> dict[Device]:
+def get_devices() -> dict[str, Device]:
     # Physical devices not implemented yet
     api = getattr(nb.virtualization, 'virtual-machines')
     devices = {}
