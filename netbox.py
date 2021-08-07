@@ -1,7 +1,6 @@
-from pdb import set_trace as st
 import pynetbox
 import subprocess
-from typing import List
+from typing import Optional
 
 from utils import die, find_description, has_tag
 
@@ -16,6 +15,45 @@ TAG_COREVPN_PREFIXES = 'core-vpn-link-network-pool'
 nb = pynetbox.api(URL, token=TOKEN)
 
 interfaces = {}
+
+
+class Address:
+    netbox_object: pynetbox.core.response.Record = None
+
+    def __init__(self, netbox_object: pynetbox.core.response.Record):
+        self.netbox_object = netbox_object
+
+    @property
+    def with_mask(self) -> str:
+        return self.netbox_object.address
+
+    @property
+    def without_mask(self) -> str:
+        return self.with_mask.split('/')[0]
+
+
+class Device:
+    netbox_object: pynetbox.core.response.Record = None
+    public_ip: Address = None
+    public_key: str = None
+    interfaces = None
+
+    def __init__(self, netbox_object: pynetbox.core.response.Record, public_ip: Address, interfaces):
+        self.netbox_object = netbox_object
+        self.public_ip = public_ip
+        self.interfaces = interfaces
+
+    @property
+    def name(self) -> str:
+        return self.netbox_object.name
+
+    @property
+    def asn(self) -> int:
+        return self.netbox_object.site.asn
+
+    @property
+    def public_key(self) -> str:
+        return self.netbox_object.custom_fields['wg-public-key']
 
 
 def get_interfaces():
@@ -39,18 +77,18 @@ def get_interfaces_for_vm(name: str):
     return interfaces.get(name, [])
 
 
-def find_public_interface(interfaces: List):
+def find_public_interface(interfaces: list):
     for interface in interfaces:
         if has_tag(interface, TAG_PUBLIC_INTERFACE):
             return interface
     return None
 
 
-def get_interface_ip(interface):
+def get_interface_ip(interface) -> Optional[Address]:
     api = getattr(nb.ipam, 'ip-addresses')
     result = api.get(vminterface_id=interface.id)
     if result:
-        return result.address.split('/')[0]
+        return Address(result)
     else:
         return None
 
@@ -72,23 +110,26 @@ def create_nic(vm, target_name: str):
     })
 
 
-def get_devices():
+def get_devices() -> dict[Device]:
     # Physical devices not implemented yet
     api = getattr(nb.virtualization, 'virtual-machines')
-    vms = {}
+    devices = {}
 
     for vm in api.all():
         if not has_tag(vm, TAG_COREVPN):
             continue
+
         interfaces = get_interfaces_for_vm(vm.name)
         public_interface = find_public_interface(interfaces) or die(f"Could not find public interface for {vm.name}")
         public_ip = get_interface_ip(public_interface)
-        setattr(vm, 'interfaces', interfaces)
-        setattr(vm, 'pubkey', vm.custom_fields['wg-public-key'])
-        setattr(vm, 'pubip', str(public_ip))
-        vms[vm.name] = vm
 
-    return vms
+        devices[vm.name] = Device(
+            netbox_object=vm,
+            interfaces=interfaces,
+            public_ip=public_ip,
+        )
+
+    return devices
 
 
 def get_link_prefix_parent():
@@ -115,14 +156,14 @@ def get_link_prefix(device1_name: str, device2_name: str):
     return pool.available_prefixes.create({"prefix_length": 30, "description": description})
 
 
-def get_link_ip(prefix: pynetbox.core.response.Record, device_name: str) -> pynetbox.core.response.Record:
+def get_link_ip(prefix: pynetbox.core.response.Record, device_name: str) -> Address:
     api = getattr(nb.ipam, 'ip-addresses')
 
     existing_ips = api.filter(parent=prefix.prefix)
     for ip in existing_ips:
         if ip.description == device_name:
-            return ip
+            return Address(ip)
 
-    return prefix.available_ips.create({"description": device_name})
+    return Address(prefix.available_ips.create({"description": device_name}))
 
 

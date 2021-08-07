@@ -3,34 +3,34 @@ import sys
 from textwrap import dedent
 
 from utils import die, find_description, has_tag, get_subnet_offset
-from netbox import create_nic, get_link_prefix, get_devices, get_link_ip, get_link_prefix_parent
+from netbox import create_nic, get_link_prefix, get_devices, get_link_ip, get_link_prefix_parent, Device
 from connection import ConnectionEndpoint, make_connection
 
 
 def generate_wg_interface(local_endpoint: ConnectionEndpoint, remote_endpoint: ConnectionEndpoint):
     print(dedent(f"""
-    set interfaces wireguard {local_endpoint.interface_name} address '{local_endpoint.tunnel_ip}/30'
+    set interfaces wireguard {local_endpoint.interface_name} address '{local_endpoint.tunnel_ip.with_mask}'
     set interfaces wireguard {local_endpoint.interface_name} description 'to {remote_endpoint.device.name}'
     set interfaces wireguard {local_endpoint.interface_name} mtu '1420'
-    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} address '{remote_endpoint.device.pubip}'
+    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} address '{remote_endpoint.device.public_ip.without_mask}'
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} allowed-ips '0.0.0.0/0'
     set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} port '{local_endpoint.port}'
-    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} public-key '{remote_endpoint.device.pubkey}'
+    set interfaces wireguard {local_endpoint.interface_name} peer {remote_endpoint.device.name} public-key '{remote_endpoint.device.public_key}'
     set interfaces wireguard {local_endpoint.interface_name} port '{local_endpoint.port}'
     """))
 
 
 def generate_bgp_peer(local_endpoint: ConnectionEndpoint, remote_endpoint: ConnectionEndpoint):
     print(dedent(f"""
-    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map import 'ONLYRFC1918PREFIXES'
-    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast route-map export 'ONLYRFC1918PREFIXES'
-    set protocols bgp neighbor {remote_endpoint.tunnel_ip} address-family ipv4-unicast soft-reconfiguration inbound
-    set protocols bgp neighbor {remote_endpoint.tunnel_ip} description '{remote_endpoint.device.name}'
-    set protocols bgp neighbor {remote_endpoint.tunnel_ip} remote-as '{remote_endpoint.asn}'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip.without_mask} address-family ipv4-unicast route-map import 'ONLYRFC1918PREFIXES'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip.without_mask} address-family ipv4-unicast route-map export 'ONLYRFC1918PREFIXES'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip.without_mask} address-family ipv4-unicast soft-reconfiguration inbound
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip.without_mask} description '{remote_endpoint.device.name}'
+    set protocols bgp neighbor {remote_endpoint.tunnel_ip.without_mask} remote-as '{remote_endpoint.asn}'
     """))
 
 
-def gen_config_device(conf_device, peer_device):
+def gen_config_device(conf_device: Device, peer_device: Device):
     print("# Config for device", conf_device.name)
     local_ep = make_connection(conf_device, peer_device)
     remote_ep = make_connection(peer_device, conf_device)
