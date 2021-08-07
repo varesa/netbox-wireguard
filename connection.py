@@ -1,5 +1,5 @@
 from netbox import get_link_ip, get_link_prefix_parent, get_link_prefix, create_nic, Device, Address
-from utils import get_subnet_offset, find_description
+from utils import get_subnet_offset, find_description, die
 
 
 class ConnectionEndpoint:
@@ -24,14 +24,14 @@ def make_connection(local_device: Device, peer_device: Device) -> ConnectionEndp
                       or create_nic(local_device, peer_device.name)
 
     prefix = get_link_prefix(local_device.name, peer_device.name)
-    offset = get_subnet_offset(get_link_prefix_parent().prefix, prefix.prefix)
+    offset = get_subnet_offset(get_link_prefix_parent().cidr, prefix.cidr)
     port = 51820 + offset
     link_ip = get_link_ip(prefix, local_device.name)
 
     return ConnectionEndpoint(
         device=local_device,
         interface_name=interface_name,
-        public_ip=local_device.public_ip,
+        public_ip=local_device.public_ip or die(f"Could not find public interface for {local_device.name}"),
         tunnel_ip=link_ip,
         port=port,
         asn=local_device.asn,

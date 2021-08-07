@@ -22,7 +22,7 @@ def find_description(records, required_description):
         return None
 
 
-def get_subnet_offset(parent, child):
+def get_subnet_offset(parent: str, child: str):
     """
     Return the index of the subnet inside a pool when pool is evenly divided into smaller subnets.
     E.g. 10.0.0.4/30 is the 2nd (offset=1) subnet with a /30 mask inside 10.0.0.0/24
